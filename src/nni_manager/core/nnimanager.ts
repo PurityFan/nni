@@ -26,7 +26,7 @@ import { Deferred } from 'ts-deferred';
 import * as component from '../common/component';
 import { DataStore, MetricDataRecord, MetricType, TrialJobInfo } from '../common/datastore';
 import { NNIError } from '../common/errors';
-import { getExperimentId } from '../common/experimentStartupInfo';
+import { getExperimentId, setInitTrialSequenceId } from '../common/experimentStartupInfo';
 import { getLogger, Logger } from '../common/log';
 import {
     ExperimentParams, ExperimentProfile, Manager,
@@ -35,13 +35,12 @@ import {
 import {
     TrainingService, TrialJobApplicationForm, TrialJobDetail, TrialJobMetric, TrialJobStatus
 } from '../common/trainingService';
-import { delay , getLogDir, getMsgDispatcherCommand} from '../common/utils';
+import { delay, getLogDir, getMsgDispatcherCommand } from '../common/utils';
 import {
-    ADD_CUSTOMIZED_TRIAL_JOB, KILL_TRIAL_JOB, NEW_TRIAL_JOB, NO_MORE_TRIAL_JOBS, REPORT_METRIC_DATA,
-    REQUEST_TRIAL_JOBS, SEND_TRIAL_JOB_PARAMETER, TERMINATE, TRIAL_END, UPDATE_SEARCH_SPACE
+    ADD_CUSTOMIZED_TRIAL_JOB, INITIALIZE, INITIALIZED, KILL_TRIAL_JOB, NEW_TRIAL_JOB, NO_MORE_TRIAL_JOBS,
+    REPORT_METRIC_DATA, REQUEST_TRIAL_JOBS, SEND_TRIAL_JOB_PARAMETER, TERMINATE, TRIAL_END, UPDATE_SEARCH_SPACE
 } from './commands';
 import { createDispatcherInterface, IpcInterface } from './ipcInterface';
-import { TrialJobMaintainerEvent, TrialJobs } from './trialJobs';
 
 /**
  * NNIManager
@@ -49,23 +48,26 @@ import { TrialJobMaintainerEvent, TrialJobs } from './trialJobs';
 class NNIManager implements Manager {
     private trainingService: TrainingService;
     private dispatcher: IpcInterface | undefined;
-    private trialJobsMaintainer: TrialJobs | undefined;
-    private currSubmittedTrialNum: number; // need to be recovered
-    private trialConcurrencyReduction: number;
+    private currSubmittedTrialNum: number;  // need to be recovered
+    private trialConcurrencyChange: number; // >0: increase, <0: decrease
     private customizedTrials: string[]; // need to be recovered
     private log: Logger;
     private dataStore: DataStore;
     private experimentProfile: ExperimentProfile;
     private dispatcherPid: number;
     private status: NNIManagerStatus;
+    private waitingTrials: string[];
+    private trialJobs: Map<string, TrialJobDetail>;
 
     constructor() {
         this.currSubmittedTrialNum = 0;
-        this.trialConcurrencyReduction = 0;
+        this.trialConcurrencyChange = 0;
         this.customizedTrials = [];
         this.trainingService = component.get(TrainingService);
         assert(this.trainingService);
         this.dispatcherPid = 0;
+        this.waitingTrials = [];
+        this.trialJobs = new Map<string, TrialJobDetail>();
 
         this.log = getLogger();
         this.dataStore = component.get(DataStore);
@@ -86,6 +88,9 @@ class NNIManager implements Manager {
                 break;
             case 'SEARCH_SPACE':
                 this.updateSearchSpace(experimentProfile.params.searchSpace);
+                break;
+            case 'MAX_TRIAL_NUM':
+                this.updateMaxTrialNum(experimentProfile.params.maxTrialNum);
                 break;
             default:
                 throw new Error('Error: unrecognized updateType');
@@ -118,11 +123,12 @@ class NNIManager implements Manager {
         this.log.debug('Setup tuner...');
 
         // Set up multiphase config
-        if(expParams.multiPhase && this.trainingService.isMultiPhaseJobSupported) {
+        if (expParams.multiPhase && this.trainingService.isMultiPhaseJobSupported) {
             this.trainingService.setClusterMetadata('multiPhase', expParams.multiPhase.toString());
         }
 
-        const dispatcherCommand: string = getMsgDispatcherCommand(expParams.tuner, expParams.assessor, expParams.multiPhase);
+        const dispatcherCommand: string = getMsgDispatcherCommand(
+            expParams.tuner, expParams.assessor, expParams.multiPhase, expParams.multiThread);
         this.log.debug(`dispatcher command: ${dispatcherCommand}`);
         this.setupTuner(
             //expParams.tuner.tunerCommand,
@@ -147,12 +153,15 @@ class NNIManager implements Manager {
         this.experimentProfile = await this.dataStore.getExperimentProfile(experimentId);
         const expParams: ExperimentParams = this.experimentProfile.params;
 
+        setInitTrialSequenceId(this.experimentProfile.maxSequenceId + 1);
+
         // Set up multiphase config
         if (expParams.multiPhase && this.trainingService.isMultiPhaseJobSupported) {
             this.trainingService.setClusterMetadata('multiPhase', expParams.multiPhase.toString());
         }
 
-        const dispatcherCommand: string = getMsgDispatcherCommand(expParams.tuner, expParams.assessor, expParams.multiPhase);
+        const dispatcherCommand: string = getMsgDispatcherCommand(
+            expParams.tuner, expParams.assessor, expParams.multiPhase, expParams.multiThread);
         this.log.debug(`dispatcher command: ${dispatcherCommand}`);
         this.setupTuner(
             dispatcherCommand,
@@ -170,6 +179,11 @@ class NNIManager implements Manager {
             .filter((job: TrialJobInfo) => job.status === 'WAITING' || job.status === 'RUNNING')
             .map((job: TrialJobInfo) => this.dataStore.storeTrialJobEvent('FAILED', job.id)));
 
+        if (this.experimentProfile.execDuration < this.experimentProfile.params.maxExecDuration &&
+            this.currSubmittedTrialNum < this.experimentProfile.params.maxTrialNum &&
+            this.experimentProfile.endTime) {
+            delete this.experimentProfile.endTime;
+        }
         this.status.status = 'EXPERIMENT_RUNNING';
 
         // TO DO: update database record for resume event
@@ -205,15 +219,8 @@ class NNIManager implements Manager {
         return this.dataStore.getTrialJobStatistics();
     }
 
-    public stopExperiment(): Promise<void> {
+    public async stopExperiment(): Promise<void> {
         this.status.status = 'STOPPING';
-        if (this.trialJobsMaintainer !== undefined) {
-            this.trialJobsMaintainer.setStopLoop();
-
-            return Promise.resolve();
-        } else {
-            return Promise.reject(new Error('Error: undefined trialJobsMaintainer'));
-        }
     }
 
     public async getMetricData(trialJobId?: string, metricType?: MetricType): Promise<MetricDataRecord[]> {
@@ -267,28 +274,14 @@ class NNIManager implements Manager {
     }
 
     private updateTrialConcurrency(trialConcurrency: number): void {
-        // TO DO: this method can only be called after startExperiment/resumeExperiment
-        if (trialConcurrency > this.experimentProfile.params.trialConcurrency) {
-            if (this.dispatcher === undefined) {
-                throw new Error('Error: tuner has to be initialized');
-            }
-            this.dispatcher.sendCommand(
-                REQUEST_TRIAL_JOBS,
-                String(trialConcurrency - this.experimentProfile.params.trialConcurrency)
-            );
-        } else {
-            // we assume trialConcurrency >= 0, which is checked by restserver
-            this.trialConcurrencyReduction += (this.experimentProfile.params.trialConcurrency - trialConcurrency);
-        }
+        // we assume trialConcurrency >= 0, which is checked by restserver
+        this.trialConcurrencyChange += (trialConcurrency - this.experimentProfile.params.trialConcurrency);
         this.experimentProfile.params.trialConcurrency = trialConcurrency;
 
         return;
     }
 
     private updateMaxExecDuration(duration: number): void {
-        if (this.trialJobsMaintainer !== undefined) {
-            this.trialJobsMaintainer.updateMaxExecDuration(duration);
-        }
         this.experimentProfile.params.maxExecDuration = duration;
 
         return;
@@ -300,6 +293,12 @@ class NNIManager implements Manager {
         }
         this.dispatcher.sendCommand(UPDATE_SEARCH_SPACE, searchSpace);
         this.experimentProfile.params.searchSpace = searchSpace;
+
+        return;
+    }
+
+    private updateMaxTrialNum(maxTrialNum: number): void {
+        this.experimentProfile.params.maxTrialNum = maxTrialNum;
 
         return;
     }
@@ -342,13 +341,150 @@ class NNIManager implements Manager {
     }
 
     private async periodicallyUpdateExecDuration(): Promise<void> {
-        const startTime: number = Date.now();
-        const execDuration: number = this.experimentProfile.execDuration;
-        for (; ;) {
-            await delay(1000 * 60 * 10); // 10 minutes
-            this.experimentProfile.execDuration = execDuration + (Date.now() - startTime) / 1000;
-            await this.storeExperimentProfile();
+        let count: number = 1;
+        while (this.status.status !== 'STOPPING' && this.status.status !== 'STOPPED') {
+            await delay(1000 * 1); // 1 seconds
+            if (this.status.status === 'EXPERIMENT_RUNNING') {
+                this.experimentProfile.execDuration += 1;
+                if (count % 10 === 0) {
+                    await this.storeExperimentProfile();
+                }
+            }
+            count += 1;
         }
+    }
+
+    private async requestTrialJobsStatus(): Promise<number> {
+        let finishedTrialJobNum: number = 0;
+        if (this.dispatcher === undefined) {
+            throw new Error('Error: tuner has not been setup');
+        }
+        for (const trialJobId of Array.from(this.trialJobs.keys())) {
+            const trialJobDetail: TrialJobDetail = await this.trainingService.getTrialJob(trialJobId);
+            const oldTrialJobDetail: TrialJobDetail | undefined = this.trialJobs.get(trialJobId);
+            if (oldTrialJobDetail !== undefined && oldTrialJobDetail.status !== trialJobDetail.status) {
+                this.trialJobs.set(trialJobId, Object.assign({}, trialJobDetail));
+                await this.dataStore.storeTrialJobEvent(trialJobDetail.status, trialJobDetail.id, undefined, trialJobDetail);
+            }
+            switch (trialJobDetail.status) {
+                case 'SUCCEEDED':
+                case 'USER_CANCELED':
+                    this.trialJobs.delete(trialJobId);
+                    finishedTrialJobNum++;
+                    this.dispatcher.sendCommand(TRIAL_END, JSON.stringify({trial_job_id: trialJobDetail.id, event: trialJobDetail.status}));
+                    break;
+                case 'FAILED':
+                case 'SYS_CANCELED':
+                    // In the current version, we do not retry
+                    // TO DO: push this job to queue for retry
+                    this.trialJobs.delete(trialJobId);
+                    finishedTrialJobNum++;
+                    this.dispatcher.sendCommand(TRIAL_END, JSON.stringify({trial_job_id: trialJobDetail.id, event: trialJobDetail.status}));
+                    break;
+                case 'WAITING':
+                case 'RUNNING':
+                case 'UNKNOWN':
+                    // Do nothing
+                    break;
+                default:
+                // TO DO: add warning in log
+            }
+        }
+        
+        return finishedTrialJobNum;
+    }
+
+    private async manageTrials(): Promise<void> {
+        if (this.dispatcher === undefined) {
+            throw new Error('Error: tuner has not been setup');
+        }
+        let allFinishedTrialJobNum: number = 0;
+        while (this.status.status !== 'STOPPING' && this.status.status !== 'STOPPED') {
+            const finishedTrialJobNum: number = await this.requestTrialJobsStatus();
+
+            allFinishedTrialJobNum += finishedTrialJobNum;
+            if (allFinishedTrialJobNum >= this.experimentProfile.params.maxTrialNum) {
+                // write this log for travis CI
+                this.log.info('Experiment done.');
+            }
+
+            // requestTrialNum is the number of trials that will be requested from tuner.
+            // If trialConcurrency does not change, requestTrialNum equals finishedTrialJobNum.
+            // If trialConcurrency changes, for example, trialConcurrency increases by 2 (trialConcurrencyChange=2), then
+            // requestTrialNum equals 2 + finishedTrialJobNum and trialConcurrencyChange becomes 0.
+            // If trialConcurrency changes, for example, trialConcurrency decreases by 4 (trialConcurrencyChange=-4) and 
+            // finishedTrialJobNum is 2, then requestTrialNum becomes -2. No trial will be requested from tuner,
+            // and trialConcurrencyChange becomes -2.
+            const requestTrialNum: number = this.trialConcurrencyChange + finishedTrialJobNum;
+            if (requestTrialNum >= 0) {
+                this.trialConcurrencyChange = 0;
+            } else {
+                this.trialConcurrencyChange = requestTrialNum;
+            }
+
+            const requestCustomTrialNum: number = Math.min(requestTrialNum, this.customizedTrials.length);
+            for (let i: number = 0; i < requestCustomTrialNum; i++) {
+                // ask tuner for more trials
+                if (this.customizedTrials.length > 0) {
+                    const hyperParams: string | undefined = this.customizedTrials.shift();
+                    this.dispatcher.sendCommand(ADD_CUSTOMIZED_TRIAL_JOB, hyperParams);
+                }
+            }
+
+            if (requestTrialNum - requestCustomTrialNum > 0) {
+                this.requestTrialJobs(requestTrialNum - requestCustomTrialNum);
+            }
+
+            // check maxtrialnum and maxduration here
+            if (this.experimentProfile.execDuration > this.experimentProfile.params.maxExecDuration ||
+                this.currSubmittedTrialNum >= this.experimentProfile.params.maxTrialNum) {
+                assert(this.status.status === 'EXPERIMENT_RUNNING' || this.status.status === 'DONE');
+                if (this.status.status === 'EXPERIMENT_RUNNING') {
+                    this.experimentProfile.endTime = Date.now();
+                    await this.storeExperimentProfile();
+                }
+                this.status.status = 'DONE';
+            } else {
+                if (this.status.status === 'DONE') {
+                    delete this.experimentProfile.endTime;
+                    await this.storeExperimentProfile();
+                }
+                this.status.status = 'EXPERIMENT_RUNNING';
+                for (let i: number = this.trialJobs.size; i < this.experimentProfile.params.trialConcurrency; i++) {
+                    if (this.waitingTrials.length === 0 ||
+                        this.currSubmittedTrialNum >= this.experimentProfile.params.maxTrialNum) {
+                        break;
+                    }
+                    const hyperParams: string | undefined = this.waitingTrials.shift();
+                    if (hyperParams === undefined) {
+                        throw new Error(`Error: invalid hyper-parameters for job submission: ${hyperParams}`);
+                    }
+                    this.currSubmittedTrialNum++;
+                    const trialJobAppForm: TrialJobApplicationForm = {
+                        jobType: 'TRIAL',
+                        hyperParameters: {
+                            value: hyperParams,
+                            index: 0
+                        }
+                    };
+                    const trialJobDetail: TrialJobDetail = await this.trainingService.submitTrialJob(trialJobAppForm);
+                    await this.storeMaxSequenceId(trialJobDetail.sequenceId);
+                    this.trialJobs.set(trialJobDetail.id, Object.assign({}, trialJobDetail));
+                    const trialJobDetailSnapshot: TrialJobDetail | undefined = this.trialJobs.get(trialJobDetail.id);
+                    if (trialJobDetailSnapshot != undefined) {
+                        await this.dataStore.storeTrialJobEvent(
+                            trialJobDetailSnapshot.status, trialJobDetailSnapshot.id, hyperParams, trialJobDetailSnapshot);
+                    } else {
+                        assert(false, `undefined trialJobDetail in trialJobs: ${trialJobDetail.id}`);
+                    }
+                }
+            }
+            await delay(1000 * 5); // 5 seconds
+        }
+
+        this.log.info('Experiment done, cleaning up...');
+        await this.experimentDoneCleanUp();
+        this.log.info('Experiment done.');
     }
 
     private storeExperimentProfile(): Promise<void> {
@@ -358,12 +494,7 @@ class NNIManager implements Manager {
     }
 
     private async run(): Promise<void> {
-        this.trialJobsMaintainer = new TrialJobs(
-            this.trainingService,
-            this.experimentProfile.execDuration,
-            this.experimentProfile.params.maxExecDuration);
-
-        assert(this.dispatcher !== undefined && this.trialJobsMaintainer !== undefined);
+        assert(this.dispatcher !== undefined);
 
         this.addEventListeners();
 
@@ -374,25 +505,19 @@ class NNIManager implements Manager {
             this.trainingService.run().catch((err: Error) => {
                 throw new NNIError('Training service error', `Training service error: ${err.message}`, err);
             }),
-            this.trialJobsMaintainer.run().catch((err: Error) => {
-                throw new NNIError('Job maintainer error', `Job maintainer error: ${err.message}`, err);
+            this.manageTrials().catch((err: Error) => {
+                throw new NNIError('Job management error', `Job management error: ${err.message}`, err);
             })]);
     }
 
-     private addEventListeners(): void {
+    private addEventListeners(): void {
         // TO DO: cannot run this method more than once in one NNIManager instance
-        if (this.dispatcher === undefined || this.trialJobsMaintainer === undefined) {
+        if (this.dispatcher === undefined) {
             throw new Error('Error: tuner or job maintainer have not been setup');
         }
         this.trainingService.addTrialJobMetricListener((metric: TrialJobMetric) => {
             this.onTrialJobMetrics(metric).catch((err: Error) => {
                 this.criticalError(new NNIError('Job metrics error', `Job metrics error: ${err.message}`, err));
-            });
-        });
-
-        this.trialJobsMaintainer.on(async (event: TrialJobMaintainerEvent, trialJobDetail: TrialJobDetail) => {
-            this.onTrialJobEvent(event, trialJobDetail).catch((err: Error) => {
-                this.criticalError(new NNIError('Trial job event error', `Trial job event error: ${err.message}`, err));
             });
         });
 
@@ -407,14 +532,9 @@ class NNIManager implements Manager {
         if (this.dispatcher === undefined) {
             throw new Error('Dispatcher error: tuner has not been setup');
         }
-        // TO DO: we should send INITIALIZE command to tuner if user's tuner needs to run init method in tuner
-        this.log.debug(`Send tuner command: update search space: ${this.experimentProfile.params.searchSpace}`);
-        this.dispatcher.sendCommand(UPDATE_SEARCH_SPACE, this.experimentProfile.params.searchSpace);
-        if (this.trialConcurrencyReduction !== 0) {
-            throw new Error('Error: cannot modify trialConcurrency before startExperiment');
-        }
-        this.log.debug(`Send tuner command: ${this.experimentProfile.params.trialConcurrency}`);
-        this.dispatcher.sendCommand(REQUEST_TRIAL_JOBS, String(this.experimentProfile.params.trialConcurrency));
+        this.log.debug(`Send tuner command: INITIALIZE: ${this.experimentProfile.params.searchSpace}`);
+        // Tuner need to be initialized with search space before generating any hyper parameters
+        this.dispatcher.sendCommand(INITIALIZE, this.experimentProfile.params.searchSpace);
     }
 
     private async onTrialJobMetrics(metric: TrialJobMetric): Promise<void> {
@@ -425,77 +545,34 @@ class NNIManager implements Manager {
         this.dispatcher.sendCommand(REPORT_METRIC_DATA, metric.data);
     }
 
-    private async onTrialJobEvent(event: TrialJobMaintainerEvent, trialJobDetail: TrialJobDetail): Promise<void> {
-        if (trialJobDetail !== undefined) {
-            this.log.debug(`Job event: ${event}, id: ${trialJobDetail.id}`);
-        } else {
-            this.log.debug(`Job event: ${event}`);
+    private requestTrialJobs(jobNum: number): void {
+        if (jobNum < 1) {
+            return;
         }
         if (this.dispatcher === undefined) {
-            throw new Error('Error: tuner has not been setup');
+            throw new Error('Dispatcher error: tuner has not been setup');
         }
-        switch (event) {
-            case 'SUCCEEDED':
-            case 'FAILED':
-            case 'USER_CANCELED':
-            case 'SYS_CANCELED':
-                if (this.trialConcurrencyReduction > 0) {
-                    this.trialConcurrencyReduction--;
-                } else {
-                    if (this.currSubmittedTrialNum < this.experimentProfile.params.maxTrialNum) {
-                        if (this.customizedTrials.length > 0) {
-                            const hyperParams: string | undefined = this.customizedTrials.shift();
-                            this.dispatcher.sendCommand(ADD_CUSTOMIZED_TRIAL_JOB, hyperParams);
-                        } else {
-                            this.dispatcher.sendCommand(REQUEST_TRIAL_JOBS, '1');
-                        }
-                    }
-                }
-                this.dispatcher.sendCommand(TRIAL_END, JSON.stringify({trial_job_id: trialJobDetail.id, event: event}));
-                await this.dataStore.storeTrialJobEvent(event, trialJobDetail.id, undefined, trialJobDetail.url);
-                break;
-            case 'RUNNING':
-                await this.dataStore.storeTrialJobEvent(event, trialJobDetail.id, undefined, trialJobDetail.url);
-                break;
-            case 'EXPERIMENT_DONE':
-                this.log.info('Experiment done, cleaning up...');
-                await this.experimentDoneCleanUp();
-                this.log.info('Experiment done.');
-                break;
-            default:
-                throw new Error('Error: unrecognized event from trialJobsMaintainer');
+        if (this.experimentProfile.params.multiThread) {
+            // Send multiple requests to ensure multiple hyper parameters are generated in non-blocking way.
+            // For a single REQUEST_TRIAL_JOBS request, hyper parameters are generated one by one
+            // sequentially.
+            for (let i: number = 0; i < jobNum; i++) {
+                this.dispatcher.sendCommand(REQUEST_TRIAL_JOBS, '1');
+            }
+        } else {
+            this.dispatcher.sendCommand(REQUEST_TRIAL_JOBS, String(jobNum));
         }
     }
 
     private async onTunerCommand(commandType: string, content: string): Promise<void> {
         this.log.info(`Command from tuner: ${commandType}, ${content}`);
-        if (this.trialJobsMaintainer === undefined) {
-            throw new Error('Error: trialJobsMaintainer not initialized');
-        }
         switch (commandType) {
+            case INITIALIZED:
+                // Tuner is intialized, search space is set, request tuner to generate hyper parameters
+                this.requestTrialJobs(this.experimentProfile.params.trialConcurrency);
+                break;
             case NEW_TRIAL_JOB:
-                if (this.currSubmittedTrialNum < this.experimentProfile.params.maxTrialNum) {
-                    this.currSubmittedTrialNum++;
-                    const trialJobAppForm: TrialJobApplicationForm = {
-                        jobType: 'TRIAL',
-                        hyperParameters: {
-                            value: content,
-                            index: 0
-                        }
-                    };
-                    const trialJobDetail: TrialJobDetail = await this.trainingService.submitTrialJob(trialJobAppForm);
-                    this.trialJobsMaintainer.setTrialJob(trialJobDetail.id, Object.assign({}, trialJobDetail));
-                    const jobDetailSnapshot: TrialJobDetail | undefined = this.trialJobsMaintainer.getTrialJob(trialJobDetail.id);
-                    if (jobDetailSnapshot !== undefined) {
-                        await this.dataStore.storeTrialJobEvent(
-                            jobDetailSnapshot.status, jobDetailSnapshot.id, content, jobDetailSnapshot.url);
-                    } else {
-                        assert(false, `undefined jobdetail in job maintainer: ${trialJobDetail.id}`);
-                    }
-                    if (this.currSubmittedTrialNum === this.experimentProfile.params.maxTrialNum) {
-                        this.trialJobsMaintainer.setNoMoreTrials();
-                    }
-                }
+                this.waitingTrials.push(content);
                 break;
             case SEND_TRIAL_JOB_PARAMETER:
                 const tunerCommand: any = JSON.parse(content);
@@ -511,10 +588,11 @@ class NNIManager implements Manager {
                 };
                 await this.trainingService.updateTrialJob(tunerCommand.trial_job_id, trialJobForm);
                 await this.dataStore.storeTrialJobEvent(
-                        'ADD_HYPERPARAMETER', tunerCommand.trial_job_id, content, undefined);
+                    'ADD_HYPERPARAMETER', tunerCommand.trial_job_id, content, undefined);
                 break;
             case NO_MORE_TRIAL_JOBS:
-                this.trialJobsMaintainer.setNoMoreTrials();
+                //this.trialJobsMaintainer.setNoMoreTrials();
+                // ignore this event for now
                 break;
             case KILL_TRIAL_JOB:
                 await this.trainingService.cancelTrialJob(JSON.parse(content));
@@ -542,6 +620,8 @@ class NNIManager implements Manager {
             id: getExperimentId(),
             revision: 0,
             execDuration: 0,
+            logDir: getLogDir(),
+            maxSequenceId: 0,
             params: {
                 authorName: '',
                 experimentName: '',
@@ -557,6 +637,13 @@ class NNIManager implements Manager {
                 }
             }
         };
+    }
+
+    private async storeMaxSequenceId(sequenceId: number): Promise<void> {
+        if (sequenceId > this.experimentProfile.maxSequenceId) {
+            this.experimentProfile.maxSequenceId = sequenceId;
+            await this.storeExperimentProfile();
+        }
     }
 }
 
