@@ -168,10 +168,15 @@ if __name__ == '__main__':
         #RCV_CONFIG = {'lr': 0.1, 'optimizer': 'Adam', 'model':'senet18'}
         _logger.debug(RCV_CONFIG)
 
+        if 'budget' in RCV_CONFIG.keys():
+            steps = RCV_CONFIG['budget']
+        else:
+            steps = RCV_CONFIG['STEPS']
         prepare(RCV_CONFIG)
         acc = 0.0
         best_acc = 0.0
-        for epoch in range(start_epoch, start_epoch+args.epochs):
+        for epoch in range(start_epoch, start_epoch+steps):
+        
             train(epoch)
             acc, best_acc = test(epoch)
             nni.report_intermediate_result(acc)
