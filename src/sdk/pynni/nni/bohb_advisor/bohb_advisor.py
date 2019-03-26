@@ -37,7 +37,7 @@ from .config_generator import CG_BOHB
 logger = logging.getLogger('BOHB_Advisor')
 
 _next_parameter_id = 0
-_KEY = 'budget'
+_KEY = 'TRIAL_BUDGET'
 _epsilon = 1e-6
 
 @unique
@@ -67,7 +67,7 @@ def create_bracket_parameter_id(brackets_id, brackets_curr_decay, increased_id=-
     ----------
     brackets_id: int
         brackets id
-    brackets_curr_decay:
+    brackets_curr_decay: int
         brackets curr decay
     increased_id: int
         increased id
@@ -113,8 +113,8 @@ class Bracket():
         self.max_budget = max_budget
         self.optimize_mode = optimize_mode
 
-        self.n = math.ceil((s_max + 1) * eta**s / (s + 1))
-        self.r = math.ceil(max_budget / eta**s)
+        self.n = math.ceil((s_max + 1) * eta**s / (s + 1) - _epsilon)
+        self.r = max_budget / eta**s
         self.i = 0
         self.hyper_configs = []         # [ {id: params}, {}, ... ]
         self.configs_perf = []          # [ {id: [seq, acc]}, {}, ... ]
@@ -128,7 +128,7 @@ class Bracket():
 
     def get_n_r(self):
         """return the values of n and r for the next round"""
-        return math.floor(self.n / self.eta**self.i), self.r * self.eta**self.i
+        return math.floor(self.n / self.eta**self.i + _epsilon), math.floor(self.r * self.eta**self.i +_epsilon)
 
     def increase_i(self):
         """i means the ith round. Increase i by 1"""
@@ -147,6 +147,7 @@ class Bracket():
             sequence number, e.g., epoch number or batch number
         value: int
             latest result with sequence number seq
+
         Returns
         -------
         None
@@ -165,6 +166,12 @@ class Bracket():
         ----------
         i: int
             the ith round
+
+        Returns
+        -------
+        new trial or None:
+            If we have generated new trials after this trial end, we will return a new trial parameters.
+            Otherwise, we will return None.
         """
         global _KEY  # pylint: disable=global-statement
         self.num_finished_configs[i] += 1
@@ -349,7 +356,7 @@ class BOHB(MsgDispatcherBase):
     def load_checkpoint(self):
         pass
 
-    def save_checkpont(self):
+    def save_checkpoint(self):
         pass
 
     def handle_initialize(self, data):
