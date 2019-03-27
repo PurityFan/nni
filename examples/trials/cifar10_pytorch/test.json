@@ -1,0 +1,7 @@
+{
+    "lr":{"_type":"choice", "_value":[0.14018768920476632]},
+    "batch_size":{"_type":"choice", "_value":[219]},
+    "weight_decay":{"_type":"choice", "_value":[0.00029676122693448974]},
+    "momentum":{"_type":"choice", "_value":[0.889202726375867]},
+    "model":{"_type":"choice", "_value":["densenet121"]}
+}

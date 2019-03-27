@@ -52,10 +52,10 @@ def prepare(args):
     ])
 
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args['batch_size']+32, shuffle=True, num_workers=2)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
 
     testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=args['batch_size']+32, shuffle=False, num_workers=2)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
     #classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
@@ -86,7 +86,16 @@ def prepare(args):
     criterion = nn.CrossEntropyLoss()
     #optimizer = optim.SGD(net.parameters(), lr=args['lr'], momentum=0.9, weight_decay=5e-4)
 
-    optimizer = optim.SGD(net.parameters(), lr=args['lr'], momentum=args['momentum'], weight_decay=args['weight_decay'])   
+    if args['optimizer'] == 'SGD':
+        optimizer = optim.SGD(net.parameters(), lr=args['lr'], momentum=0.9, weight_decay=5e-4)
+    if args['optimizer'] == 'Adadelta':
+        optimizer = optim.Adadelta(net.parameters(), lr=args['lr'])
+    if args['optimizer'] == 'Adagrad':
+        optimizer = optim.Adagrad(net.parameters(), lr=args['lr'])
+    if args['optimizer'] == 'Adam':
+        optimizer = optim.Adam(net.parameters(), lr=args['lr'])
+    if args['optimizer'] == 'Adamax':
+        optimizer = optim.Adam(net.parameters(), lr=args['lr'])       
 
 
 # Training
@@ -116,6 +125,7 @@ def train(epoch):
         correct += predicted.eq(targets).sum().item()
 
         acc = 100.*correct/total
+
 
 def test(epoch):
     global best_acc
@@ -168,12 +178,12 @@ if __name__ == '__main__':
         #RCV_CONFIG = {'lr': 0.1, 'optimizer': 'Adam', 'model':'senet18'}
         _logger.debug(RCV_CONFIG)
 
-        steps = RCV_CONFIG['TRIAL_BUDGET']
+        if "TRIAL_BUDGET" in RCV_CONFIG:
+            args.epochs = RCV_CONFIG["TRIAL_BUDGET"]
         prepare(RCV_CONFIG)
         acc = 0.0
         best_acc = 0.0
-        for epoch in range(start_epoch, start_epoch+steps):
-        
+        for epoch in range(start_epoch, start_epoch+args.epochs):
             train(epoch)
             acc, best_acc = test(epoch)
             nni.report_intermediate_result(acc)

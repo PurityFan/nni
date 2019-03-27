@@ -22,6 +22,7 @@ bohb_advisor.py
 '''
 
 from enum import Enum, unique
+import sys
 import math
 import logging
 import json_tricks
@@ -574,7 +575,7 @@ class BOHB(MsgDispatcherBase):
             # and PERIODICAL metric are independent, thus, not comparable.
             assert 'sequence' in data
             self.brackets[s].set_config_perf(
-                int(i), data['parameter_id'], data['sequence'], value)
+                int(i), data['parameter_id'], sys.maxsize, value)
             self.completed_hyper_configs.append(data)
        
             _parameters = self.parameters[data['parameter_id']]

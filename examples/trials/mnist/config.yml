@@ -11,7 +11,7 @@ useAnnotation: false
 tuner:
   #choice: TPE, Random, Anneal, Evolution, BatchTuner
   #SMAC (SMAC should be installed through nnictl)
-  builtinTunerName: TPE
+  builtinTunerName: SMAC
   classArgs:
     #choice: maximize, minimize
     optimize_mode: maximize
