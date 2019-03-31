@@ -1,0 +1,9 @@
+{
+    "dropout_rate":{"_type":"uniform","_value":[0.0, 0.5]},
+    "conv_size":{"_type":"choice","_value":[2,3,5,7]},
+    "hidden_size":{"_type":"randint","_value":[901]},
+    "batch_size": {"_type":"randint", "_value": [249]},
+    "learning_rate":{"_type":"uniform","_value":[0.000001, 0.01]},
+    "channel_1_num":{"_type":"randint","_value":[33]},
+    "channel_2_num":{"_type":"randint","_value":[33]}
+}

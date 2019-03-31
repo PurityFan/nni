@@ -232,7 +232,10 @@ if __name__ == '__main__':
         logger.debug(tuner_params)
         params = vars(get_params())
         params.update(tuner_params)
-        params['batch_num'] = params['TRIAL_BUDGET'] * 100
+        params['hidden_size'] = params['hidden_size'] + 124
+        params['batch_size'] = params['batch_size'] + 8
+        params['channel_1_num'] = params['channel_1_num'] + 32
+        params['channel_2_num'] = params['channel_2_num'] + 32
         main(params)
     except Exception as exception:
         logger.exception(exception)

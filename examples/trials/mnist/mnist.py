@@ -219,7 +219,7 @@ def get_params():
     parser.add_argument("--pool_size", type=int, default=2)
     parser.add_argument("--hidden_size", type=int, default=1024)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
-    parser.add_argument("--batch_num", type=int, default=2000)
+    parser.add_argument("--batch_num", type=int, default=5000)
     parser.add_argument("--batch_size", type=int, default=32)
 
     args, _ = parser.parse_known_args()

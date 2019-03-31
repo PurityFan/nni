@@ -323,7 +323,7 @@ class BOHB(MsgDispatcherBase):
                  random_fraction=1/3,
                  bandwidth_factor=3,
                  min_bandwidth=1e-3):
-        super()
+        super(BOHB, self).__init__()
         self.optimize_mode = OptimizeMode(optimize_mode)
         self.min_budget = min_budget
         self.max_budget = max_budget
@@ -434,12 +434,6 @@ class BOHB(MsgDispatcherBase):
             2: 'parameters', value of new hyperparameter
         """
         if not self.generated_hyper_configs:
-            ret = {
-                'parameter_id': '-1_0_0',
-                'parameter_source': 'algorithm',
-                'parameters': ''
-            }
-            send(CommandType.NoMoreTrialJobs, json_tricks.dumps(ret))
             return True
         assert self.generated_hyper_configs
         params = self.generated_hyper_configs.pop()
