@@ -1,11 +1,11 @@
 authorName: default
 experimentName: example_mnist_hyperband
-maxExecDuration: 3h
+maxExecDuration: 5h
 maxTrialNum: 10000
-trialConcurrency: 5
+trialConcurrency: 3
 #choice: local, remote, pai
 trainingServicePlatform: pai
-searchSpacePath: search_space.json
+searchSpacePath: search_paper.json
 #choice: true, false
 useAnnotation: false
 nniManagerIp: 10.150.144.59

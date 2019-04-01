@@ -1,7 +1,7 @@
 authorName: default
 experimentName: example_mnist
 trialConcurrency: 3
-maxExecDuration: 12h
+maxExecDuration: 5h
 maxTrialNum: 10000
 #choice: local, remote, pai
 trainingServicePlatform: pai
@@ -12,7 +12,7 @@ nniManagerIp: 10.150.144.59
 tuner:
   #choice: TPE, Random, Anneal, Evolution, BatchTuner, MetisTuner
   #SMAC (SMAC should be installed through nnictl)
-  builtinTunerName: TPE
+  builtinTunerName: SMAC
   classArgs:
     #choice: maximize, minimize
     optimize_mode: maximize
