@@ -1,7 +1,7 @@
 authorName: default
 experimentName: example_mnist
 trialConcurrency: 3
-maxExecDuration: 5h
+maxExecDuration: 12h
 maxTrialNum: 10000
 #choice: local, remote, pai
 trainingServicePlatform: pai

@@ -1,6 +1,6 @@
 authorName: default
 experimentName: example_mnist_bohb
-maxExecDuration: 5h
+maxExecDuration: 12h
 maxTrialNum: 10000
 trialConcurrency: 3
 #choice: local, remote, pai

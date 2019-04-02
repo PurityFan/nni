@@ -460,12 +460,6 @@ class BOHB(MsgDispatcherBase):
             return True to indicate that the request has been received
         """
         if not self.generated_hyper_configs:
-            ret = {
-                'parameter_id': '-1_0_0',
-                'parameter_source': 'algorithm',
-                'parameters': ''
-            }
-            send(CommandType.NoMoreTrialJobs, json_tricks.dumps(ret))
             return True
         assert self.generated_hyper_configs
         params = self.generated_hyper_configs.pop()
@@ -561,19 +555,22 @@ class BOHB(MsgDispatcherBase):
         s, i, _ = hyper_params['parameter_id'].split('_')
         hyper_configs = self.brackets[int(s)].inform_trial_end(int(i))
 
+        # Finish this bracket and generate a new bracket
+        if self.brackets[int(s)].no_more_trial:
+            self.curr_s -= 1
+            self.generate_new_bracket()
+            for _ in range(self.credit):
+                self._request_one_trial_job()
+        
         if hyper_configs is not None:
             logger.debug(
                 'bracket %s next round %s, hyper_configs: %s', s, i, hyper_configs)
             self.generated_hyper_configs = self.generated_hyper_configs + hyper_configs
             for _ in range(self.credit):
                 self._request_one_trial_job()
-
-        # Finish this bracket and generate a new bracket
-        if self.brackets[int(s)].no_more_trial:
-            self.curr_s -= 1
-            self.generate_new_bracket()
+        
         return True
-
+        
     def handle_report_metric_data(self, data):
         """reveice the metric data and update Bayesian optimization with final result
 
