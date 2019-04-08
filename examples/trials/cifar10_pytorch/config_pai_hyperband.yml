@@ -1,11 +1,11 @@
 authorName: default
 experimentName: example_pytorch_cifar10_hyperband
 trialConcurrency: 3
-maxExecDuration: 12h
-maxTrialNum: 500
+maxExecDuration: 32h
+maxTrialNum: 5000
 #choice: local, remote, pai
 trainingServicePlatform: pai
-searchSpacePath: ori_search.json
+searchSpacePath: search_space.json
 #choice: true, false
 useAnnotation: false
 nniManagerIp: 10.150.144.59
@@ -13,10 +13,10 @@ advisor:
   builtinAdvisorName: Hyperband
   classArgs:
     optimize_mode: maximize
-    R: 81
+    R: 200
     eta: 3
 trial:
-  command: python3 original_main.py
+  command: python3 main_advisor.py
   codeDir: .
   gpuNum: 1
   cpuNum: 1
