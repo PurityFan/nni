@@ -1,7 +1,7 @@
 authorName: default
 experimentName: example_pytorch_cifar10_tpe
-trialConcurrency: 3
-maxExecDuration: 32h
+trialConcurrency: 6
+maxExecDuration: 64h
 maxTrialNum: 1000
 #choice: local, remote, pai
 trainingServicePlatform: pai

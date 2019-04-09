@@ -1,8 +1,8 @@
 authorName: default
 experimentName: example_pytorch_cifar10_bohb
-trialConcurrency: 3
-maxExecDuration: 32h
-maxTrialNum: 500
+trialConcurrency: 6
+maxExecDuration: 64h
+maxTrialNum: 5000
 #choice: local, remote, pai
 trainingServicePlatform: pai
 searchSpacePath: search_space.json
@@ -14,7 +14,7 @@ advisor:
   classArgs:
     optimize_mode: maximize
     min_budget: 1
-    max_budget: 200
+    max_budget: 81
     eta: 3
 trial:
   command: python3 main_advisor.py
