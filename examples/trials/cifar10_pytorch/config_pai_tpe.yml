@@ -1,8 +1,8 @@
 authorName: default
 experimentName: example_pytorch_cifar10_tpe
-trialConcurrency: 5
+trialConcurrency: 50
 maxExecDuration: 64h
-maxTrialNum: 1000
+maxTrialNum: 140
 #choice: local, remote, pai
 trainingServicePlatform: pai
 searchSpacePath: search_space.json
