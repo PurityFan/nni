@@ -52,31 +52,15 @@ def prepare(args):
     ])
 
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args['batch_size'], shuffle=True, num_workers=2)
 
     testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=args['batch_size'], shuffle=False, num_workers=2)
 
     #classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
     # Model
-    print('==> Building model..')
-    if args['model'] == 'vgg':
-        net = VGG('VGG19')
-    if args['model'] == 'resnet18':
-        net = ResNet18()
-    if args['model'] == 'googlenet':
-        net = GoogLeNet()
-    if args['model'] == 'densenet121':
-        net = DenseNet121()
-    if args['model'] == 'mobilenet':
-        net = MobileNet()
-    if args['model'] == 'dpn92':
-        net = DPN92()
-    if args['model'] == 'shufflenetg2':
-        net = ShuffleNetG2()
-    if args['model'] == 'senet18':
-        net = SENet18()
+    net = ResNet18()
 
     net = net.to(device)
     if device == 'cuda':
@@ -86,16 +70,7 @@ def prepare(args):
     criterion = nn.CrossEntropyLoss()
     #optimizer = optim.SGD(net.parameters(), lr=args['lr'], momentum=0.9, weight_decay=5e-4)
 
-    if args['optimizer'] == 'SGD':
-        optimizer = optim.SGD(net.parameters(), lr=args['lr'], momentum=0.9, weight_decay=5e-4)
-    if args['optimizer'] == 'Adadelta':
-        optimizer = optim.Adadelta(net.parameters(), lr=args['lr'])
-    if args['optimizer'] == 'Adagrad':
-        optimizer = optim.Adagrad(net.parameters(), lr=args['lr'])
-    if args['optimizer'] == 'Adam':
-        optimizer = optim.Adam(net.parameters(), lr=args['lr'])
-    if args['optimizer'] == 'Adamax':
-        optimizer = optim.Adam(net.parameters(), lr=args['lr'])       
+    optimizer = optim.SGD(net.parameters(), lr=args['lr'], momentum=args['momentum'], weight_decay=args['weight_decay'])   
 
 
 # Training
