@@ -1,8 +1,8 @@
 authorName: default
 experimentName: example_pytorch_cifar10
-trialConcurrency: 50
+trialConcurrency: 1
 maxExecDuration: 100h
-maxTrialNum: 50
+maxTrialNum: 10
 #choice: local, remote, pai
 trainingServicePlatform: pai
 searchSpacePath: search_space.json
@@ -21,7 +21,7 @@ trial:
   codeDir: .
   gpuNum: 1
   cpuNum: 1
-  memoryMB: 32768
+  memoryMB: 8196
   #The docker image to run nni job on pai
   image: msranni/nni:latest
   #The hdfs directory to store data on pai, format 'hdfs://host:port/directory'
