@@ -1,5 +1,5 @@
 authorName: default
-experimentName: example_pytorch_cifar10
+experimentName: example_1
 trialConcurrency: 1
 maxExecDuration: 100h
 maxTrialNum: 10
@@ -17,7 +17,7 @@ tuner:
     #choice: maximize, minimize
     optimize_mode: maximize
 trial:
-  command: python3 main.py
+  command: python3 main_100.py
   codeDir: .
   gpuNum: 1
   cpuNum: 1

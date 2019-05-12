@@ -1,0 +1,172 @@
+[
+{"parameter": {"lr": 0.40546389749205985, "batch_size": 64, "weight_decay": 0.00010325312096626926, "momentum": 0.46786620099142484}, "value": 91.4},
+{"parameter": {
+                    "lr": 0.15176092045485456,
+                    "batch_size": 64,
+                    "weight_decay": 0.0004384661025149587,
+                    "momentum": 0.28593561105219417
+                },
+ "value": 91.27},
+{"parameter": {
+                    "lr": 0.24927349474998736,
+                    "batch_size": 128,
+                    "weight_decay": 0.00014865300328821188,
+                    "momentum": 0.8521472799233671
+                },
+ "value": 90.53},
+{"parameter": {
+                    "lr": 0.3306101044643158,
+                    "batch_size": 64,
+                    "weight_decay": 0.00009846420723093444,
+                    "momentum": 0.16660063550164186
+                },
+ "value": 92.4},
+{"parameter": {
+                    "lr": 0.2787646186831224,
+                    "batch_size": 256,
+                    "weight_decay": 0.0001580361330855473,
+                    "momentum": 0.24391916300762814
+                },
+ "value": 92.03},
+{"parameter": {
+                    "lr": 0.3069169271576007,
+                    "batch_size": 64,
+                    "weight_decay": 0.0009187011700018802,
+                    "momentum": 0.7235951620286647
+                },
+ "value": 74.45},
+{"parameter": {
+                    "lr": 0.3110327238507914,
+                    "batch_size": 128,
+                    "weight_decay": 0.0009316580144436802,
+                    "momentum": 0.07629850348296921
+                },
+ "value": 88.57},
+{"parameter": {
+                    "lr": 0.10374436234876368,
+                    "batch_size": 128,
+                    "weight_decay": 0.0008749355396796051,
+                    "momentum": 0.2521474218190823
+                },
+ "value": 91.59},
+{"parameter": {
+                    "lr": 0.4818854934311825,
+                    "batch_size": 32,
+                    "weight_decay": 0.00027867343308018896,
+                    "momentum": 0.6700873804235246
+                },
+ "value": 81},
+{"parameter": {
+                    "lr": 0.010636045327636706,
+                    "batch_size": 64,
+                    "weight_decay": 0.00007708082753549992,
+                    "momentum": 0.14535167159202864
+                },
+ "value": 92.49},
+{"parameter": {
+                    "lr": 0.18631585116156715,
+                    "batch_size": 64,
+                    "weight_decay": 0.0003736221548572791,
+                    "momentum": 0.8524111347259818
+                },
+ "value": 85.35},
+{"parameter": {
+                    "lr": 0.09852472029196117,
+                    "batch_size": 256,
+                    "weight_decay": 0.0007071342731456778,
+                    "momentum": 0.8114364234929711
+                },
+ "value": 90.55},
+{"parameter": {
+                    "lr": 0.4922677540612855,
+                    "batch_size": 64,
+                    "weight_decay": 0.0006690902079810244,
+                    "momentum": 0.5401182251109312
+                },
+ "value": 78.34},
+{"parameter": {
+                    "lr": 0.1869786856628143,
+                    "batch_size": 128,
+                    "weight_decay": 0.0006395467859177091,
+                    "momentum": 0.8309878715495722
+                },
+ "value": 85.92},
+{"parameter": {
+                    "lr": 0.35141171588223324,
+                    "batch_size": 64,
+                    "weight_decay": 0.0006717073890804459,
+                    "momentum": 0.6737183621078221
+                },
+ "value": 79.52},
+{"parameter": {
+                    "lr": 0.28452689746275867,
+                    "batch_size": 64,
+                    "weight_decay": 0.00029718705422837144,
+                    "momentum": 0.5801745903473825
+                },
+ "value": 88.73},
+{"parameter": {
+                    "lr": 0.19574762245858313,
+                    "batch_size": 64,
+                    "weight_decay": 0.0001435911433486254,
+                    "momentum": 0.15273222929852584
+                },
+ "value": 92.54},
+{"parameter": {
+                    "lr": 0.3091427824941171,
+                    "batch_size": 256,
+                    "weight_decay": 0.0007192610669614288,
+                    "momentum": 0.3449149611402976
+                },
+ "value": 89.18},
+{"parameter": {
+                    "lr": 0.4097757644717856,
+                    "batch_size": 128,
+                    "weight_decay": 0.0007847660225859872,
+                    "momentum": 0.628930857587431
+                },
+ "value": 82.79},
+{"parameter": {
+                    "lr": 0.18944034924633368,
+                    "batch_size": 32,
+                    "weight_decay": 0.00004168765215997097,
+                    "momentum": 0.2695629659978751
+                },
+ "value": 92.75},
+{"parameter": {
+                    "lr": 0.37587093417693523,
+                    "batch_size": 128,
+                    "weight_decay": 0.0008045974408919082,
+                    "momentum": 0.11255536858672574
+                },
+ "value": 88.75},
+{"parameter": {
+                    "lr": 0.09583681492031511,
+                    "batch_size": 256,
+                    "weight_decay": 0.00007757060124957478,
+                    "momentum": 0.8499567135635797
+                },
+ "value": 92.42},
+{"parameter": {
+                    "lr": 0.09398892481008232,
+                    "batch_size": 256,
+                    "weight_decay": 0.000039731795362869786,
+                    "momentum": 0.12824738371439676
+                },
+ "value": 92.71},
+{"parameter": {
+                    "lr": 0.087034840874638,
+                    "batch_size": 128,
+                    "weight_decay": 0.00022817375902670038,
+                    "momentum": 0.5848497814643071
+                },
+
+ "value": 92.39},
+{"parameter": {
+                    "lr": 0.024808559096313975,
+                    "batch_size": 256,
+                    "weight_decay": 0.00015848263343268745,
+                    "momentum": 0.032170139341433486
+                },
+ "value": 91.58}
+]
